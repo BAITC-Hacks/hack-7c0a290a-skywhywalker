@@ -1,0 +1,62 @@
+.stApp { background: #F5F8F5; color: #192C26; }
+[data-testid="stHeader"] { background: #F5F8F5; }
+[data-testid="stSidebar"] { background: #FFFFFF; border-right: 1px solid #E2EAE4; }
+[data-testid="stSidebar"] h1, [data-testid="stSidebar"] label,
+[data-testid="stSidebar"] p { color: #274536 !important; }
+[data-testid="stSidebar"] [role="radiogroup"] { gap: 6px; }
+[data-testid="stSidebar"] [role="radiogroup"] label {
+  padding: 10px 12px; border-radius: 8px; width: 100%; }
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
+  background: #E7F5E5; color: #176534 !important; font-weight: 700; }
+.block-container { padding-top: 1.5rem; max-width: 1600px; padding-bottom: 2rem; }
+h1, h2, h3 { color: #152E23 !important; letter-spacing: -.035em; }
+h1 { font-size: clamp(1.8rem, 3vw, 2.4rem) !important; font-weight: 750 !important; }
+h3 { font-size: 1.15rem !important; }
+div[data-testid="stMetric"] { background: #FFFFFF; border: 1px solid #DFE9E1;
+  border-radius: 12px; padding: 14px 18px; }
+div[data-testid="stMetricLabel"] { color: #68796F; font-size: .82rem; }
+div[data-testid="stMetricValue"] { color: #183A27; font-size: 1.85rem; }
+div[data-testid="stVerticalBlockBorderWrapper"] > div { border-color: #DFE9E1 !important; }
+[data-testid="stVerticalBlock"] [data-testid="stVerticalBlockBorderWrapper"] {
+  background: white; border-radius: 12px; }
+.stButton > button[kind="primary"] { background: #49A535; border-color: #49A535;
+  color: white; border-radius: 8px; font-weight: 650; min-height: 42px; }
+.stButton > button[kind="secondary"], .stDownloadButton > button {
+  border: 1px solid #D4E3D6; border-radius: 8px; color: #245B35; font-weight: 600; }
+.case-note { background: #EDF6EA; border-left: 3px solid #51AF3D;
+  border-radius: 8px; padding: 12px 16px; margin: 8px 0 14px; color: #315A3A; }
+.eyebrow { color: #6A7C70; letter-spacing: .08em; font-weight: 650; font-size: .72rem; }
+.brand { display: flex; align-items: center; gap: 10px; margin: 0 0 26px; }
+.brand-mark { background: #51AF3D; color: white; border-radius: 10px; padding: 5px 12px;
+  font-size: 27px; font-weight: 700; }
+.brand strong { font-size: 1.45rem; color: #153724; letter-spacing: -.04em; }
+.brand small { display: block; color: #758276; margin-top: -3px; font-size: .8rem; }
+.page-meta { display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; color: #708075; font-size: .83rem; margin-bottom: 8px; }
+.date-tag { border: 1px solid #DEE8DE; padding: 6px 10px; border-radius: 6px; background: white; }
+.priority-pill { display: inline-block; color: #247331; background: #E5F5E0;
+  padding: 4px 11px; border-radius: 20px; font-size: .71rem; font-weight: 750; letter-spacing: .05em; }
+.score { font-size: 3.5rem; line-height: 1.1; font-weight: 800; letter-spacing: -.06em;
+  color: #125326; margin: 12px 0 2px; }
+.score-caption { color: #6B7B70; font-size: .8rem; margin-bottom: 14px; }
+.signal { display: flex; align-items: flex-start; gap: 11px; padding: 11px 0;
+  border-top: 1px solid #ECF0EC; }
+.signal .check { background: #25833A; border-radius: 50%; color: white;
+  padding: 0 5px; font-size: 12px; margin-top: 2px; }
+.signal strong { font-size: .91rem; color: #233C2E; }
+.signal small { display: block; color: #79877D; font-size: .75rem; margin-top: 3px; }
+.caution { background: #FFF5E4; border-radius: 7px; padding: 9px 12px; font-size: .76rem; color: #99601A; }
+.small-note { border: 1px solid #E0EBDD; border-radius: 8px;
+  padding: 12px 16px; color: #576E5D; font-size: .86rem; }
+.flow-strip { display: flex; justify-content: space-between; gap: 12px;
+  padding: 16px 20px; background: #FFFFFF; border: 1px solid #E0EBDD; border-radius: 10px; margin-top: 12px; }
+.flow-strip div { font-size: .8rem; color: #305C39; }
+.flow-strip span { color: #6B7B70; font-size: .74rem; display: block; margin-top: 4px; }
+.queue-id { font-family: monospace; font-size: .86rem; color: #294834; padding-top: 9px; }
+.role-chip { display: inline-block; background: #EDF5EC; border-radius: 6px;
+  padding: 3px 8px; color: #386247; font-size: .76rem; margin-top: 7px; }
+@media (max-width: 700px) {
+  .page-meta { flex-wrap: wrap; }
+  .flow-strip { flex-direction: column; }
+  .block-container { padding-left: 1rem; padding-right: 1rem; }
+}

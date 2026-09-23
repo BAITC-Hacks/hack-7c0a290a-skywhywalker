@@ -37,53 +37,7 @@ ROLE_COLORS = {
 
 
 st.set_page_config(page_title="MoneyMap · AML аналитика", page_icon="◉", layout="wide")
-st.markdown(
-    """
-    <style>
-    .stApp { background: #F5F8F3; color: #193025; }
-    [data-testid="stHeader"] { background: #F5F8F3; }
-    [data-testid="stSidebar"] { background: #153724; border-right: 1px solid #2F5B3E; }
-    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] p { color: #F3F9F1 !important; }
-    .block-container { padding-top: 1.3rem; max-width: 1480px; }
-    h1, h2, h3 { color: #173A25 !important; letter-spacing: -.025em; }
-    h1 { font-size: 2.5rem !important; }
-    div[data-testid="stMetric"] { background: #FFFFFF; border: 1px solid #DAE8D9;
-      border-radius: 18px; padding: 17px 20px; box-shadow: 0 8px 30px rgba(18, 62, 34, .045); }
-    div[data-testid="stMetricLabel"] { color: #587260; }
-    div[data-testid="stMetricValue"] { color: #173A25; }
-    .stButton > button[kind="primary"] { background: #4FAA3A; border-color: #4FAA3A;
-      color: white; border-radius: 12px; font-weight: 700; }
-    .stButton > button[kind="secondary"] { border-color: #B9D6B9;
-      border-radius: 12px; color: #1E6335; font-weight: 650; }
-    .stDownloadButton > button { border-radius: 12px; border-color: #B9D6B9; color: #1E6335; }
-    .case-note { background: #EBF7E9; border-left: 4px solid #51AF3D;
-      border-radius: 12px; padding: 1rem 1.2rem; margin: 0.6rem 0 1rem; color: #21472B; }
-    .eyebrow { color: #318445; letter-spacing: .16em; font-weight: 800; font-size: .78rem; }
-    .hero { background: linear-gradient(115deg, #123E28 0%, #17613A 66%, #398C4A 100%);
-      color: #fff; border-radius: 24px; padding: 2.1rem 2.4rem; margin: .7rem 0 1.2rem;
-      box-shadow: 0 16px 42px rgba(20, 80, 40, .18); }
-    .hero .kicker { color: #BFF0B5; font-size: .78rem; font-weight: 800;
-      letter-spacing: .16em; margin-bottom: .7rem; }
-    .hero h1 { color: white !important; font-size: 2.6rem !important; margin: .2rem 0 .5rem; }
-    .hero p { color: #E1F2E1; font-size: 1.06rem; line-height: 1.5;
-      max-width: 780px; margin: 0; }
-    .story-card { background: white; border: 1px solid #DAE8D9; border-radius: 18px;
-      padding: 1.2rem 1.25rem; min-height: 160px; margin-bottom: .4rem; }
-    .story-card .num { color: #50A742; font-size: .8rem; font-weight: 800; letter-spacing: .12em; }
-    .story-card h3 { font-size: 1.06rem !important; margin: .55rem 0 .4rem; }
-    .story-card p { color: #5A6D60; font-size: .94rem; line-height: 1.45; margin: 0; }
-    .candidate { background: #FFFFFF; border: 1px solid #D6E6D5; border-radius: 16px;
-      padding: .9rem 1rem; min-height: 130px; margin: .15rem 0 .4rem; }
-    .candidate .label { color: #508054; font-size: .77rem; font-weight: 800; letter-spacing: .08em; }
-    .candidate strong { color: #193B27; font-size: 1.05rem; }
-    .candidate p { color: #58705E; font-size: .85rem; margin: .3rem 0 0; line-height: 1.35; }
-    .small-note { background: #FFFFFF; border: 1px solid #E0EBDD; border-radius: 14px;
-      padding: .9rem 1.1rem; color: #47604C; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+st.markdown(f'<style>{(ROOT / "ui.css").read_text()}</style>', unsafe_allow_html=True)
 
 
 @st.cache_data(show_spinner=False)
@@ -100,10 +54,10 @@ def graph_from_edges(_nodes: pd.DataFrame, _edges: pd.DataFrame):
     return make_graph(_nodes, _edges)
 
 
-def selected_subgraph(graph: nx.DiGraph, roles: pd.DataFrame, selected: int, radius: int):
+def selected_subgraph(graph: nx.DiGraph, roles: pd.DataFrame, selected: int, radius: int, max_nodes: int = 17):
     neighbors = nx.single_source_shortest_path_length(graph.to_undirected(), selected, cutoff=radius)
     members = set(neighbors)
-    if len(members) > 65:
+    if len(members) > max_nodes:
         scores = []
         for gid in members - {selected}:
             amount = sum(
@@ -117,8 +71,20 @@ def selected_subgraph(graph: nx.DiGraph, roles: pd.DataFrame, selected: int, rad
             )
             scores.append((amount, roles.at[gid, "priority_score"], gid))
         scores.sort(reverse=True)
-        members = {selected} | {gid for _, _, gid in scores[:64]}
-    return graph.subgraph(members).copy()
+        # Reserve room for both incoming and outgoing flows; a high-volume side
+        # must not erase the other side of the story in the compact view.
+        members = {selected}
+        quota = (max_nodes - 1) // 2
+        for candidates in (set(graph.predecessors(selected)), set(graph.successors(selected))):
+            members.update(gid for _, _, gid in [s for s in scores if s[2] in candidates][:quota])
+        for _, _, gid in scores:
+            if len(members) >= max_nodes:
+                break
+            members.add(gid)
+    view = graph.subgraph(members).copy()
+    if radius == 1:
+        view.remove_edges_from([(u, v) for u, v in view.edges if selected not in (u, v)])
+    return view
 
 
 def one_hop_positions(view: nx.DiGraph, selected: int):
@@ -136,8 +102,8 @@ def one_hop_positions(view: nx.DiGraph, selected: int):
     return positions
 
 
-def network_figure(graph: nx.DiGraph, roles: pd.DataFrame, selected: int, radius: int):
-    view = selected_subgraph(graph, roles, selected, radius)
+def network_figure(graph: nx.DiGraph, roles: pd.DataFrame, selected: int, radius: int, max_nodes: int = 17, compact: bool = False):
+    view = selected_subgraph(graph, roles, selected, radius, max_nodes)
     if view.number_of_nodes() == 1:
         return None, view
     positions = (
@@ -171,27 +137,28 @@ def network_figure(graph: nx.DiGraph, roles: pd.DataFrame, selected: int, radius
             x=[positions[gid][0] for gid in gids],
             y=[positions[gid][1] for gid in gids],
             mode="markers+text",
-            text=[str(gid) if gid == selected or roles.at[gid, "priority_score"] >= 0.70 else "" for gid in gids],
-            textposition="top center", textfont=dict(color="#173A25", size=10),
+            text=["…" + str(gid)[-9:] if len(view) <= 21 or gid == selected else "" for gid in gids],
+            textposition="bottom center", textfont=dict(color="#385246", size=11),
             marker=dict(
                 color=color,
-                size=[25 if gid == selected else 11 + 18 * roles.at[gid, "priority_score"] for gid in gids],
-                line=dict(color="#173A25", width=2 if selected in gids else 0.4),
+                size=[42 if gid == selected else 17 + 10 * roles.at[gid, "priority_score"] for gid in gids],
+                line=dict(color="#FFFFFF", width=2),
             ),
-            customdata=[[gid, roles.at[gid, "evidence"]] for gid in gids],
+            customdata=[[str(gid), roles.at[gid, "evidence"]] for gid in gids],
             hovertemplate="gid %{customdata[0]}<br>%{customdata[1]}<extra></extra>",
             name=ROLE_NAMES[role],
         ))
     fig.update_layout(
         template="plotly_white", paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF",
-        height=580, margin=dict(l=10, r=10, t=28, b=10),
-        xaxis=dict(visible=False), yaxis=dict(visible=False),
-        annotations=annotations, legend=dict(orientation="h", y=-0.04, x=0),
+        height=350 if compact else 480, margin=dict(l=35, r=35, t=35, b=20),
+        xaxis=dict(visible=False, range=[-1.5, 1.5] if radius == 1 else None),
+        yaxis=dict(visible=False, range=[-1.2, 1.3] if radius == 1 else None),
+        annotations=annotations, legend=dict(orientation="h", y=-0.08, x=0, font=dict(size=10)),
         font=dict(color="#294B32"), hoverlabel=dict(bgcolor="#EAF5E9", font_color="#173A25"),
     )
     if radius == 1:
-        fig.add_annotation(x=-0.95, y=1.13, text="ПОЛУЧЕНО", showarrow=False, font=dict(color="#54815B", size=11))
-        fig.add_annotation(x=0.95, y=1.13, text="ОТПРАВЛЕНО", showarrow=False, font=dict(color="#54815B", size=11))
+        for x, label in ((-1, "ПЛАТЕЛЬЩИКИ"), (0, "ВЫБРАННЫЙ УЗЕЛ"), (1, "ПОЛУЧАТЕЛИ")):
+            fig.add_annotation(x=x, y=1.13, text=label, showarrow=False, font=dict(color="#6B8074", size=10))
     return fig, view
 
 
@@ -296,10 +263,8 @@ def open_gid(gid: int) -> None:
     st.rerun()
 
 
-st.sidebar.markdown('<div class="eyebrow" style="color:#B8E8AF">MONEYMAP / HACKALEM AI</div>', unsafe_allow_html=True)
-st.sidebar.title("Граф денег")
-st.sidebar.caption("Рабочее место AML-аналитика")
-section = st.sidebar.radio("Раздел", ["Обзор", "Расследование", "Приоритеты", "Кластеры", "Методика"], key="section")
+st.sidebar.markdown('<div class="brand"><span class="brand-mark">≋</span><div><strong>MoneyMap</strong><small>Граф денег</small></div></div>', unsafe_allow_html=True)
+section = st.sidebar.radio("Рабочее место", ["Обзор", "Расследование", "Приоритеты", "Кластеры", "Методика"], key="section", label_visibility="collapsed", format_func=lambda name: "Обзор дела" if name == "Обзор" else name)
 st.sidebar.divider()
 gid_text = st.sidebar.text_input("Поиск по gid", key="gid_input")
 if not gid_text.isdigit() or int(gid_text) not in roles.index:
@@ -310,47 +275,67 @@ else:
 if st.sidebar.button("Открыть узел →", use_container_width=True):
     st.session_state.pending_section = "Расследование"
     st.rerun()
+st.sidebar.divider()
+st.sidebar.caption("HackAlem AI · Финансы\n\nОбезличенные данные · локальный анализ")
 
 if section == "Обзор":
     st.markdown(
-        """<div class="hero">
-          <div class="kicker">АНАЛИТИКА ФИНАНСОВОЙ СЕТИ · HACKALEM AI</div>
-          <h1>От известных получателей — к структуре всей сети</h1>
-          <p>Аналитик знает 81 исходного клиента. MoneyMap восстанавливает направленные связи переводов,
-          присваивает каждому узлу объяснимую роль и показывает, кого проверить следующим.</p>
-        </div>""",
+        '<div class="page-meta"><span>Рабочее место AML-аналитика</span><span class="date-tag">Июль 2026 · 4 колена</span></div>',
         unsafe_allow_html=True,
     )
+    st.title("Кого проверить следующим?")
+    st.caption("Находим значимые узлы и объясняем движение денег — от известных клиентов к очереди проверки.")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Известны в начале", int(roles.is_seed.sum()), help="Исходные seed из задания")
+    c1.metric("Исходных клиентов", int(roles.is_seed.sum()), help="Исходные seed из задания")
     c2.metric("Узлов в сети", f"{len(roles):,}".replace(",", " "))
     c3.metric("Переводов", f"{len(tx):,}".replace(",", " "))
-    c4.metric("Кандидатов в очереди", len(top), help="Ранее неизвестные узлы в top_nodes.csv")
-    st.markdown("### Что получает аналитик")
-    s1, s2, s3 = st.columns(3, gap="medium")
-    story = [
-        (s1, "01 / СОБРАТЬ", "Карта движения денег", "Переводы соединяются в направленный граф на четыре колена от известных клиентов."),
-        (s2, "02 / ПОНЯТЬ", "Роль каждого узла", "Система находит признаки консолидации, транзита, распределения и объясняет их числами."),
-        (s3, "03 / ДЕЙСТВОВАТЬ", "Очередь для проверки", "Топ узлов помогает начать ручную AML-проверку с наиболее значимых связей."),
-    ]
-    for column, number, title, description in story:
-        column.markdown(
-            f'<div class="story-card"><div class="num">{number}</div><h3>{title}</h3><p>{description}</p></div>',
-            unsafe_allow_html=True,
-        )
-    st.markdown("### С кого начать проверку")
-    st.caption("Три первых ранее неизвестных узла. Откройте карточку, чтобы увидеть основания и направление переводов.")
-    candidate_cols = st.columns(3, gap="medium")
-    for column, candidate in zip(candidate_cols, top.head(3).itertuples(index=False)):
-        with column:
+    c4.metric("В очереди проверки", len(top), help="Ранее неизвестные узлы в top_nodes.csv")
+    st.write("")
+    preview_gid = default_gid
+    preview = roles.loc[preview_gid]
+    map_col, action_col = st.columns([1.8, 1], gap="medium")
+    with map_col, st.container(border=True):
+        st.subheader("Как движутся деньги")
+        st.caption("Первый узел в очереди · крупнейшие наблюдаемые связи с обеих сторон")
+        figure, preview_view = network_figure(graph, roles, preview_gid, 1, max_nodes=9, compact=True)
+        if figure is not None:
+            st.plotly_chart(figure, width="stretch", config={"displayModeBar": False})
+        else:
+            st.info("У этого узла нет наблюдаемых связей.")
+        st.caption("Это фрагмент сети, не вся цепочка. Стрелки — направление переводов. Полный gid и основание роли — при наведении.")
+    with action_col, st.container(border=True):
+        st.markdown('<span class="priority-pill">ПРИОРИТЕТ № 1</span>', unsafe_allow_html=True)
+        st.subheader("Проверить связи узла")
+        st.caption(f"gid {preview_gid} · {ROLE_NAMES[preview.role]}")
+        st.markdown(f'<div class="score">{preview.priority_score:.3f}</div><div class="score-caption">Приоритет проверки · не вероятность нарушения</div>', unsafe_allow_html=True)
+        signals = [
+            (f"{int(preview.in_deg)} плательщиков", "Наблюдаемые входящие контрагенты"),
+            (f"{int(preview.out_deg)} получателей", "Наблюдаемые исходящие контрагенты"),
+            (f"Достижим из {int(preview.seed_reach)} исходных клиентов", "По направленным путям не длиннее четырёх колен"),
+        ]
+        for title, detail in signals:
             st.markdown(
-                f'<div class="candidate"><div class="label">№ {candidate.rank} · {escape(ROLE_NAMES[candidate.role])} · {candidate.priority_score:.3f}</div>'
-                f'<strong>gid {candidate.gid}</strong><p>{escape(candidate.why)}</p></div>',
+                f'<div class="signal"><span class="check">✓</span><div><strong>{title}</strong><small>{detail}</small></div></div>',
                 unsafe_allow_html=True,
             )
-            if st.button("Открыть расследование →", key=f"candidate_{candidate.gid}", use_container_width=True):
+        if st.button("Открыть расследование →", key="start_investigation", type="primary", use_container_width=True):
+            open_gid(preview_gid)
+        st.markdown('<div class="caution">ⓘ Гипотеза для проверки, не доказательство нарушения.</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        title_col, all_col = st.columns([4, 1])
+        title_col.subheader("Очередь проверки")
+        if all_col.button(f"Все {len(top)} узлов →", use_container_width=True):
+            st.session_state.pending_section = "Приоритеты"
+            st.rerun()
+        for candidate in top.head(3).itertuples(index=False):
+            rank_col, gid_col, role_col, score_col, btn_col = st.columns([.35, 2.4, 1.6, 1, 1.3])
+            rank_col.markdown(f'<div class="queue-id">{candidate.rank:02}</div>', unsafe_allow_html=True)
+            gid_col.markdown(f'<div class="queue-id">{candidate.gid}</div>', unsafe_allow_html=True)
+            role_col.markdown(f'<span class="role-chip">{escape(ROLE_NAMES[candidate.role])}</span>', unsafe_allow_html=True)
+            score_col.markdown(f'<div class="queue-id">{candidate.priority_score:.3f}</div>', unsafe_allow_html=True)
+            if btn_col.button("Изучить →", key=f"candidate_{candidate.gid}", use_container_width=True):
                 open_gid(candidate.gid)
-    st.markdown('<div class="small-note">Выводы — гипотезы для проверки аналитиком. Узлы на четвёртом колене не считаются конечными получателями автоматически: их исходящие могли остаться за границей выгрузки.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="flow-strip"><div>01 · Выберите узел<span>Очередь или поиск по gid</span></div><div>02 · Изучите связи<span>Направление, объёмы, роли</span></div><div>03 · Проверьте основания<span>Факты, ограничения, AI-справка</span></div></div>', unsafe_allow_html=True)
     with st.expander("Что важно для оценки жюри"):
         st.markdown("""
         **Проблема и ценность (15):** понятный сценарий AML-аналитика и приоритет проверки.
@@ -362,24 +347,29 @@ if section == "Обзор":
         """)
 
 elif section == "Расследование":
-    st.markdown('<div class="eyebrow">ШАГ 2 / ИССЛЕДОВАТЬ УЗЕЛ</div>', unsafe_allow_html=True)
-    st.title("Почему проверить этот gid?")
-    st.caption("Слева — направление переводов; справа — проверяемые численные основания. Введите любой gid в боковой панели.")
+    st.markdown('<div class="eyebrow">ОЧЕРЕДЬ ПРОВЕРКИ / РАССЛЕДОВАНИЕ</div>', unsafe_allow_html=True)
+    st.title("Связи и основания")
+    st.caption("Сначала изучите движение денег, затем сопоставьте гипотезу с наблюдаемыми фактами.")
     row = roles.loc[selected]
-    left, right = st.columns([1.55, 1], gap="large")
-    with left:
-        st.subheader(f"Сеть вокруг gid {selected}")
-        radius = st.radio("Радиус связей", [1, 2], horizontal=True, label_visibility="collapsed")
-        figure, view = network_figure(graph, roles, selected, radius)
+    left, right = st.columns([1.8, 1], gap="medium")
+    with left, st.container(border=True):
+        st.subheader("Карта переводов")
+        st.caption(f"Выбранный узел: {selected}")
+        controls_a, controls_b = st.columns(2)
+        radius = controls_a.radio("Глубина обзора", [1, 2], horizontal=True, format_func=lambda n: "Прямые связи" if n == 1 else "Два шага")
+        max_nodes = controls_b.selectbox("Плотность карты", [9, 17, 33, 65], index=1, format_func=lambda n: f"До {n} узлов")
+        figure, view = network_figure(graph, roles, selected, radius, max_nodes=max_nodes)
         if figure:
             st.plotly_chart(figure, width="stretch")
-            st.caption(f"Показано до 65 узлов с наиболее значимыми связями и {view.number_of_edges()} направленных рёбер. Полный список переводов — ниже. Стрелки показывают направление денег.")
+            st.caption(f"Фрагмент: {len(view)} узлов, {view.number_of_edges()} направленных рёбер. Для прямых связей оставлены только переводы выбранного узла; лимит сохраняет обе стороны потока. Все его переводы — в таблице ниже.")
         else:
             st.info("У этого gid нет наблюдаемых рёбер в выгрузке.")
-    with right:
-        st.subheader(f"Карточка gid {selected}")
-        st.markdown(f"**Роль:** {ROLE_NAMES[row.role]} · **сила признака:** {row.role_score:.0%}")
-        st.markdown(f"**Приоритет:** {row.priority_score:.3f} · **кластер:** {int(row.cluster_id)} · **колено:** {int(row.depth)}")
+    with right, st.container(border=True):
+        st.markdown('<span class="priority-pill">ГИПОТЕЗА ПО УЗЛУ</span>', unsafe_allow_html=True)
+        st.subheader(ROLE_NAMES[row.role])
+        st.caption(f"gid {selected}")
+        st.markdown(f"**Приоритет:** {row.priority_score:.3f} · **сила признака:** {row.role_score:.0%}")
+        st.caption(f"Кластер {int(row.cluster_id)} · колено {int(row.depth)} · не оценка виновности")
         st.markdown(f'<div class="case-note">{escape(row.evidence)}</div>', unsafe_allow_html=True)
         m1, m2 = st.columns(2)
         m1.metric("Получено в графе", fmt_kzt(row.in_kzt))
@@ -390,7 +380,9 @@ elif section == "Расследование":
         st.write(f"Достижим из **{int(row.seed_reach)}** исходных seed; доля быстрых выходов после поступления — **{row.fast_forward:.0%}**.")
         path = shortest_seed_path(graph, roles, selected)
         if path:
-            st.write("Кратчайший наблюдаемый путь от seed: **" + " → ".join(map(str, path)) + "**")
+            with st.expander("Путь от исходного клиента"):
+                for step, path_gid in enumerate(path):
+                    st.text(f"{step + 1}. {path_gid}")
         else:
             st.write("Наблюдаемого пути от seed нет.")
         if row.truncated_by_depth:
