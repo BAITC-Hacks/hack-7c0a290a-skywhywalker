@@ -1,0 +1,26 @@
+import {Route,Sparkles,FileSearch,GitCompareArrows,ArrowDownLeft,ArrowUpRight} from 'lucide-react';
+import {fmt,amountUnit} from '../services/api';
+import {levels,components,componentAvailable,componentWeight,patternName,patternHint,roleName,roleHints} from '../services/labels';
+
+export default function NodeDetails({node,metadata,onFollow,onAI,onEvidence,onCompare,following,busy}) {
+  if(!node)return <div className="empty-panel">Выберите круг на графе или найдите счёт по полному идентификатору.</div>;
+  const f=node.features;
+  const patterns=node.patterns||[];
+  const day=metadata?.time_precision==='day';
+  const fast=node.fast_forward_fraction??f.fast_forward_fraction;
+  const multiplier=node.priority_multiplier??1;
+  return <>
+    <div className="account-heading"><span className="eyebrow">ВЫБРАННЫЙ СЧЁТ</span><h2>{node.node_id}</h2><span className="community-badge">Группа {node.cluster_id??f.community_id}</span></div>
+    <div className="account-badges">{node.is_seed&&<span>Исходный счёт</span>}{node.depth!=null&&<span>Глубина: {node.depth}</span>}{node.truncated_by_depth&&<span className="boundary-badge">Граница обхода</span>}</div>
+    <section className={`role-card role-${node.role||'peripheral'}`}><span className="eyebrow">ПРЕДПОЛАГАЕМАЯ РОЛЬ</span><h3 title={roleHints[node.role]}>{roleName(node.role)}</h3><p>{node.role_evidence||roleHints[node.role]}</p>{node.role_score!=null&&<small>Соответствие правилам: {fmt(node.role_score)} из 1. Это эвристическая оценка, не вероятность.</small>}</section>
+    {node.truncated_by_depth&&<p className="data-warning">На четвёртом переходе выгрузка обрывается. Отсутствие исходящих не означает, что деньги остались на счёте.</p>}
+    {node.is_seed&&<p className="data-warning">Исходный счёт: поступления извне выборки не видны. По соотношению поступлений и отправлений нельзя восстановить полный баланс.</p>}
+    <div className="priority-card"><div className="row-between"><span>Приоритет проверки</span><span className={`level ${node.priority_level.toLowerCase()}`}>{levels[node.priority_level]}</span></div><div className="big-score">{fmt(node.priority_score)}<small>из 100</small></div><div className="score-track"><div className={`${node.priority_level.toLowerCase()}-bg`} style={{width:`${node.priority_score}%`}}/></div><p>Подсказывает, какие счета изучить раньше. Это не вероятность нарушения.</p>{multiplier<1&&<p>Учтена неполнота данных: поправка ×{fmt(multiplier)}{node.is_seed?' (исходный счёт ×0,7)':''}{node.truncated_by_depth?' (граница обхода ×0,65)':''}.</p>}</div>
+    <div className="node-actions"><button className="primary" onClick={onFollow} disabled={busy}><Route size={17}/>{following?'Показать всю сеть':'Проследить связи'}</button><div><button onClick={onAI} disabled={busy}><Sparkles size={16}/>Объяснить</button><button onClick={onEvidence} disabled={busy}><FileSearch size={16}/>Основания</button><button onClick={onCompare} disabled={busy}><GitCompareArrows size={16}/>Сравнить</button></div></div>
+    <div className="components"><div className="section-label">ИЗ ЧЕГО СЛОЖИЛАСЬ ОЦЕНКА</div>{Object.entries(node.components).map(([key,value])=>{const available=componentAvailable(node,key);return <div className="component-row" key={key}><span>{components[key]||key}{available&&<small title="Вес среди доступных компонентов">{Math.round(componentWeight(node,key))}%</small>}</span>{available?<><div className="mini-track"><div style={{width:`${value}%`}}/></div><b>{Math.round(value)}</b></>:<em>Нет данных</em>}</div>;})}<p className="muted small">Если компонент недоступен, веса остальных пересчитываются. Затем применяется поправка на неполноту данных.</p></div>
+    <div className="patterns-block"><div className="section-label">ОСОБЕННОСТИ ПЕРЕВОДОВ <span>{patterns.length}</span></div><div className="pattern-tags">{patterns.length?patterns.map(p=><span key={p} title={patternHint(p)}>{patternName(p)}</span>):<p className="muted small">Заданные признаки не обнаружены. Это не исключает нарушений.</p>}</div></div>
+    <div className="network-metrics"><div><ArrowDownLeft size={18}/><small>Отправителей</small><b>{f.incoming_counterparties}</b></div><div><ArrowUpRight size={18}/><small>Получателей</small><b>{f.outgoing_counterparties}</b></div></div>
+    <dl className="metric-list"><div><dt>Объём переводов, {amountUnit(metadata?.currency)}</dt><dd>{fmt(f.total_volume)}</dd></div><div title="Как часто счёт находится на кратчайших путях между другими счетами"><dt>Роль посредника</dt><dd>{new Intl.NumberFormat('ru-RU',{maximumFractionDigits:4}).format(f.betweenness)}</dd></div><div title="Значимость счёта с учётом входящих связей и объёмов"><dt>Значимость в сети</dt><dd>{new Intl.NumberFormat('ru-RU',{maximumFractionDigits:4}).format(f.pagerank)}</dd></div><div><dt>Связанных групп</dt><dd>{f.communities_connected}</dd></div>{node.seed_reach!=null&&<div><dt>Достигающих исходных счетов</dt><dd>{fmt(node.seed_reach)}</dd></div>}</dl>
+    {day&&<div className="timing-note"><b>Даты без времени суток</b><p>Индикатор близких поступлений и отправлений за 0–2 календарных дня: {fast==null?'нет данных':`${fmt(fast*100)}%`}. Он не устанавливает порядок операций внутри дня или движение одних и тех же денег. Минутные интервалы не рассчитываются.</p></div>}
+  </>;
+}
