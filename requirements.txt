@@ -3,5 +3,6 @@ pandas>=2.0,<3
 pyarrow>=14,<25
 networkx>=3.0,<4
 scipy>=1.11,<2
+openai>=2.0,<4
 streamlit>=1.38,<2
 plotly>=5.20,<7

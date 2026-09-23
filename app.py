@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
 
 import networkx as nx
@@ -158,6 +160,54 @@ def fmt_kzt(value):
     return f"{value:,.0f} ₸".replace(",", " ")
 
 
+def investigation_facts(selected: int, row: pd.Series, related: pd.DataFrame, path: list[int] | None):
+    """Only observed, anonymized facts for an optional AI-written case note."""
+    counterparties = related.sort_values("sum_kzt", ascending=False).head(8)
+    return {
+        "gid": selected,
+        "role": row.role,
+        "role_evidence": row.evidence,
+        "role_score": float(row.role_score),
+        "priority_score": float(row.priority_score),
+        "depth": int(row.depth),
+        "is_seed": bool(row.is_seed),
+        "truncated_by_depth": bool(row.truncated_by_depth),
+        "in_deg": int(row.in_deg),
+        "out_deg": int(row.out_deg),
+        "in_kzt": float(row.in_kzt),
+        "out_kzt": float(row.out_kzt),
+        "seed_reach": int(row.seed_reach),
+        "fast_forward_fraction": float(row.fast_forward),
+        "shortest_observed_seed_path": path,
+        "largest_observed_edges": [
+            {"src": int(r.src), "dst": int(r.dst), "sum_kzt": float(r.sum_kzt), "n_tx": int(r.n_tx)}
+            for r in counterparties.itertuples(index=False)
+        ],
+    }
+
+
+def generate_case_note(facts: dict) -> str:
+    from openai import OpenAI
+
+    client = OpenAI(timeout=20.0)
+    result = client.responses.create(
+        model=os.getenv("OPENAI_MODEL", "gpt-6-luna"),
+        reasoning={"effort": "none"},
+        instructions=(
+            "Ты помощник AML-аналитика. Напиши краткую справку на русском по ТОЛЬКО переданным фактам. "
+            "Три раздела: 'Наблюдения', 'Гипотеза', 'Что проверить дальше'. "
+            "Приводи конкретные gid и суммы, если они есть. Не придумывай личность, источник денег, "
+            "виновность или связи за пределами выгрузки. Помни: входящие seed неполны, глубина 4 "
+            "обрезана, быстрый выход не доказывает прохождение тех же денег. "
+            "Гипотезу формулируй условно. Не более 180 слов."
+        ),
+        input=json.dumps(facts, ensure_ascii=False),
+        max_output_tokens=500,
+        store=False,
+    )
+    return result.output_text
+
+
 if not all((DATA / f"{name}.parquet").exists() for name in ("nodes", "edges", "transactions")):
     st.error("Положите nodes.parquet, edges.parquet и transactions.parquet в папку data/ и перезапустите приложение.")
     st.stop()
@@ -246,6 +296,18 @@ if section == "Расследование":
         }),
         hide_index=True, width="stretch", height=280,
     )
+    st.subheader("AI-справка по узлу")
+    if not os.getenv("OPENAI_API_KEY"):
+        st.caption("Чтобы включить справку, задайте OPENAI_API_KEY в окружении перед запуском. Основной анализ работает без ключа.")
+    elif st.button("Сформировать справку", type="primary"):
+        with st.spinner("Готовлю справку по наблюдаемым фактам…"):
+            try:
+                facts = investigation_facts(selected, row, related, path)
+                st.session_state["case_note"] = (selected, generate_case_note(facts))
+            except Exception as exc:
+                st.error(f"Не удалось получить AI-справку: {type(exc).__name__}. Проверьте ключ, модель и доступ к API.")
+    if st.session_state.get("case_note", (None, None))[0] == selected:
+        st.markdown(st.session_state["case_note"][1])
 
 elif section == "Приоритеты":
     st.subheader("Кого проверить первым")
