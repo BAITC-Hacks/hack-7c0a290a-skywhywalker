@@ -22,13 +22,13 @@ def parse_csv(raw: bytes) -> pd.DataFrame:
     for col in ['sender', 'receiver']:
         df[col] = df[col].str.strip()
         if not df[col].map(lambda v: bool(re.fullmatch(r'[\w.\-:@ ]{1,64}', v))).all():
-            raise ValueError('Account ID: 1–64 букв, цифр, пробелов или символов . - : @ _')
+            raise ValueError('Идентификатор счёта: 1–64 букв, цифр, пробелов или символов . - : @ _')
     df['amount'] = pd.to_numeric(df.amount, errors='coerce')
     if not (np.isfinite(df.amount) & (df.amount > 0) & (df.amount <= 1e15)).all():
         raise ValueError('Суммы должны быть конечными положительными числами не более 10^15.')
     df['timestamp'] = pd.to_datetime(df.timestamp, errors='coerce', utc=True, format='mixed')
     if df.timestamp.isna().any():
-        raise ValueError('Некорректный timestamp. Используйте ISO 8601. Время без зоны считается UTC.')
+        raise ValueError('Некорректное время перевода (timestamp). Используйте ISO 8601. Время без зоны считается UTC.')
     if len(set(df.sender) | set(df.receiver)) > MAX_NODES:
         raise ValueError(f'Для MVP разрешено не более {MAX_NODES} узлов.')
     df['id'] = [f'tx-{i+1:06d}' for i in range(len(df))]

@@ -1,4 +1,4 @@
-"""One-command local launcher. Frontend is already built in the release ZIP."""
+"""Local launcher. Build frontend with pnpm build before first run."""
 from pathlib import Path
 import os
 import subprocess
@@ -24,7 +24,7 @@ def main():
     except ImportError:
         subprocess.run([str(PYTHON),'-m','pip','install','-r',str(ROOT/'requirements-lock.txt')],check=True)
     if not (ROOT/'frontend/dist/index.html').exists():
-        raise SystemExit('Frontend missing. Run: cd frontend && pnpm install && pnpm build')
+        raise SystemExit('Интерфейс не собран. В папке frontend выполните pnpm install и pnpm build.')
     def open_when_ready():
         for _ in range(60):
             try:
@@ -35,7 +35,7 @@ def main():
             except Exception:
                 time.sleep(1)
     threading.Thread(target=open_when_ready,daemon=True).start()
-    print('MoneyGraph AI: http://127.0.0.1:8000 | Ctrl+C to stop',flush=True)
+    print('MoneyGraph AI: http://127.0.0.1:8000 | Ctrl+C — остановить',flush=True)
     subprocess.run([str(PYTHON),'-m','uvicorn','backend.main:app','--host','127.0.0.1','--port','8000'],check=True)
 
 if __name__=='__main__':

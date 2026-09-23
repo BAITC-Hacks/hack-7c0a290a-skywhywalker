@@ -5,9 +5,9 @@
 node_modules/
 __pycache__/
 .pytest_cache/
+*.py[cod]
 *.log
 frontend/dist/
 /data/*
 !/data/sample_transactions.csv
 !/data/generate_sample.py
-*.py[cod]

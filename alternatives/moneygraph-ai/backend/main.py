@@ -33,18 +33,18 @@ def dataset(x_dataset_id: str = Header(default='demo')):
     with lock:
         entry = store.get(x_dataset_id)
         if entry is None:
-            raise HTTPException(404,'Dataset не найден. Загрузите CSV повторно.')
+            raise HTTPException(404,'Набор данных не найден. Загрузите CSV повторно.')
         entry['time'] = time.time()
         return entry
 
 def analyzed(entry=Depends(dataset)):
     if entry['analysis'] is None:
-        raise HTTPException(409,'Сначала нажмите Analyze Network.')
+        raise HTTPException(409,'Сначала нажмите «Построить граф».')
     return entry['analysis']
 
 def require_node(a,node):
     if node not in a.nodes:
-        raise HTTPException(404,'Account не найден.')
+        raise HTTPException(404,'Счёт не найден.')
 
 @app.get('/api/health')
 def health():
@@ -65,7 +65,7 @@ async def upload(file:UploadFile=File(...)):
             if k!='demo' and time.time()-store[k]['time']>7200:
                 del store[k]
         if len(store)>=9:
-            raise HTTPException(429,'Достигнут лимит 8 активных datasets. Перезапустите локальный сервер или дождитесь истечения 2 часов.')
+            raise HTTPException(429,'Достигнут лимит 8 активных наборов данных. Перезапустите локальный сервер или дождитесь истечения 2 часов.')
         key = uuid.uuid4().hex
         store[key] = {'df':df,'filename':(file.filename or 'transactions.csv')[:150],'analysis':None,'time':time.time()}
     return {'dataset_id':key,'transactions':len(df),'filename':store[key]['filename']}
@@ -111,7 +111,7 @@ def compare(body:CompareRequest,a=Depends(analyzed)):
     for n in [body.node_a,body.node_b]:
         require_node(a,n)
     if body.node_a==body.node_b:
-        raise HTTPException(422,'Выберите два разных account.')
+        raise HTTPException(422,'Выберите два разных счёта.')
     context = {'nodes':[a.nodes[body.node_a],a.nodes[body.node_b]],'evidence':[a.context(body.node_a),a.context(body.node_b)]}
     return {**ai_copilot.compare(context),'evidence_node_ids':[body.node_a,body.node_b],'nodes':context['nodes']}
 
