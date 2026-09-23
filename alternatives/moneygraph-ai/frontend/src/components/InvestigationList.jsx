@@ -1,0 +1,3 @@
+export default function InvestigationList({ranking,selected,onSelect}) {
+ return <section id="ranking" className="ranking" tabIndex={-1}><div className="section-label">INVESTIGATION PRIORITY <span>{ranking.length}</span></div><p className="muted small">Очередь аналитической проверки</p><div className="ranking-scroll">{ranking.map((n,i)=><button className={`rank-row ${selected===n.node_id?'selected':''}`} key={n.node_id} onClick={()=>onSelect(n.node_id)}><span className="rank-number">{String(i+1).padStart(2,'0')}</span><span className="rank-account"><b>{n.node_id}</b><small>{n.patterns[0]?.replaceAll('_',' ')||'Без паттернов'}</small></span><span className={`score ${n.priority_level.toLowerCase()}`}>{n.priority_score.toFixed(2)}</span></button>)}</div></section>
+}
