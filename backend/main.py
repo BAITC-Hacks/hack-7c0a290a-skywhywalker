@@ -14,8 +14,8 @@ from .graph_engine import parse_csv, hop_nodes
 from .datasets import load_dataset, load_official
 from .submission import frames_for_analysis, zip_for_analysis
 from .analysis import Analysis
-from .models import NodeRequest, CompareRequest, ChatRequest
-from . import ai_copilot
+from .models import NodeRequest, CompareRequest, ChatRequest, InvestigateRequest
+from . import ai_copilot, investigator
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / '.env')
@@ -156,6 +156,11 @@ def summary(a=Depends(analyzed)):
     top = a.ranking[:5]
     ctx = {'stats':a.stats,'metadata':a.metadata,'top_nodes':top,'pattern_counts':a.pattern_counts,'paths':[p for n in top[:3] for p in a.paths(n['node_id'],3)]}
     return {**ai_copilot.summary(ctx),'evidence_node_ids':[n['node_id'] for n in top]}
+
+@app.post('/api/ai/investigate')
+def investigate(body:InvestigateRequest,a=Depends(analyzed)):
+    require_node(a,body.node_id)
+    return investigator.investigate(a,body.node_id,body.question)
 
 if (ROOT/'frontend/dist').exists():
     app.mount('/',StaticFiles(directory=ROOT/'frontend/dist',html=True),name='frontend')

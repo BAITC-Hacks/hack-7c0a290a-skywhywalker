@@ -1,7 +1,15 @@
-import {Users,ArrowLeftRight,Layers,ScanLine,GitBranch,Coins} from 'lucide-react';
+import {Users,ArrowLeftRight,Layers,ListOrdered,Coins} from 'lucide-react';
 import {short,fmt,amountUnit} from '../services/api';
+import {StatsCard} from './ui/StatsCard';
 
-export default function StatsBar({stats}) {
-  const items=[['Счетов',stats?.accounts,Users],['Переводов',stats?.transactions,ArrowLeftRight],['Общий объём',stats?short(stats.total_volume):undefined,Coins],['Групп счетов',stats?.communities,Layers],['Высокий приоритет',stats?.high_priority,ScanLine],['Исходных счетов',stats?.seed_count,GitBranch]];
-  return <div className="stats">{items.map(([label,value,Icon])=><div className="stat" key={label}><span><Icon size={16}/>{label}</span><strong className={label==='Высокий приоритет'&&value?'high':''}>{value??'—'}</strong>{label==='Общий объём'&&<small title={stats?fmt(stats.total_volume):undefined}>{amountUnit(stats?.currency)}</small>}</div>)}</div>;
+export default function StatsBar({stats,ranking=[]}) {
+  const candidates=ranking.filter(node=>!node.is_seed).length;
+  const items=[
+    ['Счетов в сети',stats?fmt(stats.accounts):'—',Users,stats?`${fmt(stats.seed_count)} исходных клиентов`:'Ожидаем данные'],
+    ['Переводов',stats?fmt(stats.transactions):'—',ArrowLeftRight,'Исходные операции'],
+    ['Объём переводов',stats?short(stats.total_volume):'—',Coins,amountUnit(stats?.currency)],
+    ['Групп связей',stats?fmt(stats.communities):'—',Layers,'Структурные гипотезы'],
+    ['Кандидатов в выгрузке',stats?Math.min(50,candidates):'—',ListOrdered,'По приоритету, без исходных',true],
+  ];
+  return <div className="metric-grid">{items.map(([title,value,Icon,description,accent])=><StatsCard key={title} title={title} value={value} icon={<Icon size={17}/>} description={description} accent={accent}/>)}</div>;
 }

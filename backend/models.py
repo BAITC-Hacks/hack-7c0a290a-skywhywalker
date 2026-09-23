@@ -10,6 +10,9 @@ class CompareRequest(BaseModel):
 class ChatRequest(NodeRequest):
     question: str = Field(min_length=1,max_length=1000)
 
+class InvestigateRequest(NodeRequest):
+    question: str | None = Field(default=None,max_length=1000)
+
 class Signal(BaseModel):
     name: str
     evidence: str
