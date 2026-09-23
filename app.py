@@ -255,6 +255,13 @@ if "pending_gid" in st.session_state:
     st.session_state.gid_input = str(st.session_state.pop("pending_gid"))
 if "pending_section" in st.session_state:
     st.session_state.section = st.session_state.pop("pending_section")
+route_sections = {"overview": "Обзор", "investigation": "Расследование", "priorities": "Приоритеты", "clusters": "Кластеры", "method": "Методика"}
+if st.query_params.get("section") in route_sections:
+    st.session_state.section = route_sections[st.query_params["section"]]
+    route_gid = st.query_params.get("gid", "")
+    if route_gid.isdigit() and int(route_gid) in roles.index:
+        st.session_state.gid_input = route_gid
+    st.query_params.clear()
 
 
 def open_gid(gid: int) -> None:
@@ -279,63 +286,8 @@ st.sidebar.divider()
 st.sidebar.caption("HackAlem AI · Финансы\n\nОбезличенные данные · локальный анализ")
 
 if section == "Обзор":
-    st.markdown(
-        '<div class="page-meta"><span>Рабочее место AML-аналитика</span><span class="date-tag">Июль 2026 · 4 колена</span></div>',
-        unsafe_allow_html=True,
-    )
-    st.title("Кого проверить следующим?")
-    st.caption("Находим значимые узлы и объясняем движение денег — от известных клиентов к очереди проверки.")
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Исходных клиентов", int(roles.is_seed.sum()), help="Исходные seed из задания")
-    c2.metric("Узлов в сети", f"{len(roles):,}".replace(",", " "))
-    c3.metric("Переводов", f"{len(tx):,}".replace(",", " "))
-    c4.metric("В очереди проверки", len(top), help="Ранее неизвестные узлы в top_nodes.csv")
-    st.write("")
-    preview_gid = default_gid
-    preview = roles.loc[preview_gid]
-    map_col, action_col = st.columns([1.8, 1], gap="medium")
-    with map_col, st.container(border=True):
-        st.subheader("Как движутся деньги")
-        st.caption("Первый узел в очереди · крупнейшие наблюдаемые связи с обеих сторон")
-        figure, preview_view = network_figure(graph, roles, preview_gid, 1, max_nodes=9, compact=True)
-        if figure is not None:
-            st.plotly_chart(figure, width="stretch", config={"displayModeBar": False})
-        else:
-            st.info("У этого узла нет наблюдаемых связей.")
-        st.caption("Это фрагмент сети, не вся цепочка. Стрелки — направление переводов. Полный gid и основание роли — при наведении.")
-    with action_col, st.container(border=True):
-        st.markdown('<span class="priority-pill">ПРИОРИТЕТ № 1</span>', unsafe_allow_html=True)
-        st.subheader("Проверить связи узла")
-        st.caption(f"gid {preview_gid} · {ROLE_NAMES[preview.role]}")
-        st.markdown(f'<div class="score">{preview.priority_score:.3f}</div><div class="score-caption">Приоритет проверки · не вероятность нарушения</div>', unsafe_allow_html=True)
-        signals = [
-            (f"{int(preview.in_deg)} плательщиков", "Наблюдаемые входящие контрагенты"),
-            (f"{int(preview.out_deg)} получателей", "Наблюдаемые исходящие контрагенты"),
-            (f"Достижим из {int(preview.seed_reach)} исходных клиентов", "По направленным путям не длиннее четырёх колен"),
-        ]
-        for title, detail in signals:
-            st.markdown(
-                f'<div class="signal"><span class="check">✓</span><div><strong>{title}</strong><small>{detail}</small></div></div>',
-                unsafe_allow_html=True,
-            )
-        if st.button("Открыть расследование →", key="start_investigation", type="primary", use_container_width=True):
-            open_gid(preview_gid)
-        st.markdown('<div class="caution">ⓘ Гипотеза для проверки, не доказательство нарушения.</div>', unsafe_allow_html=True)
-    with st.container(border=True):
-        title_col, all_col = st.columns([4, 1])
-        title_col.subheader("Очередь проверки")
-        if all_col.button(f"Все {len(top)} узлов →", use_container_width=True):
-            st.session_state.pending_section = "Приоритеты"
-            st.rerun()
-        for candidate in top.head(3).itertuples(index=False):
-            rank_col, gid_col, role_col, score_col, btn_col = st.columns([.35, 2.4, 1.6, 1, 1.3])
-            rank_col.markdown(f'<div class="queue-id">{candidate.rank:02}</div>', unsafe_allow_html=True)
-            gid_col.markdown(f'<div class="queue-id">{candidate.gid}</div>', unsafe_allow_html=True)
-            role_col.markdown(f'<span class="role-chip">{escape(ROLE_NAMES[candidate.role])}</span>', unsafe_allow_html=True)
-            score_col.markdown(f'<div class="queue-id">{candidate.priority_score:.3f}</div>', unsafe_allow_html=True)
-            if btn_col.button("Изучить →", key=f"candidate_{candidate.gid}", use_container_width=True):
-                open_gid(candidate.gid)
-    st.markdown('<div class="flow-strip"><div>01 · Выберите узел<span>Очередь или поиск по gid</span></div><div>02 · Изучите связи<span>Направление, объёмы, роли</span></div><div>03 · Проверьте основания<span>Факты, ограничения, AI-справка</span></div></div>', unsafe_allow_html=True)
+    from overview_workspace import render_overview
+    st.html(render_overview(graph, roles, top, tx))
     with st.expander("Что важно для оценки жюри"):
         st.markdown("""
         **Проблема и ценность (15):** понятный сценарий AML-аналитика и приоритет проверки.
@@ -352,19 +304,25 @@ elif section == "Расследование":
     st.caption("Сначала изучите движение денег, затем сопоставьте гипотезу с наблюдаемыми фактами.")
     row = roles.loc[selected]
     left, right = st.columns([1.8, 1], gap="medium")
-    with left, st.container(border=True):
+    with left, st.container(border=True, key="investigation_map"):
         st.subheader("Карта переводов")
         st.caption(f"Выбранный узел: {selected}")
-        controls_a, controls_b = st.columns(2)
-        radius = controls_a.radio("Глубина обзора", [1, 2], horizontal=True, format_func=lambda n: "Прямые связи" if n == 1 else "Два шага")
-        max_nodes = controls_b.selectbox("Плотность карты", [9, 17, 33, 65], index=1, format_func=lambda n: f"До {n} узлов")
-        figure, view = network_figure(graph, roles, selected, radius, max_nodes=max_nodes)
-        if figure:
-            st.plotly_chart(figure, width="stretch")
-            st.caption(f"Фрагмент: {len(view)} узлов, {view.number_of_edges()} направленных рёбер. Для прямых связей оставлены только переводы выбранного узла; лимит сохраняет обе стороны потока. Все его переводы — в таблице ниже.")
-        else:
-            st.info("У этого gid нет наблюдаемых рёбер в выгрузке.")
-    with right, st.container(border=True):
+        simple_tab, network_tab = st.tabs(["Схема потоков", "Исследовать граф"])
+        with simple_tab:
+            from flow_visual import render_flow_html
+            st.html('<div class="mm-flow-wrap">' + render_flow_html(graph, roles, selected) + '</div>')
+            st.caption("Крупнейшие связи: до 3 входящих и 4 исходящих. Нажмите на узел, чтобы продолжить проверку. Полный список переводов — ниже.")
+        with network_tab:
+            controls_a, controls_b = st.columns(2)
+            radius = controls_a.radio("Глубина обзора", [1, 2], horizontal=True, format_func=lambda n: "Прямые связи" if n == 1 else "Два шага")
+            max_nodes = controls_b.selectbox("Плотность карты", [9, 17, 33, 65], index=1, format_func=lambda n: f"До {n} узлов")
+            figure, view = network_figure(graph, roles, selected, radius, max_nodes=max_nodes)
+            if figure:
+                st.plotly_chart(figure, width="stretch")
+                st.caption(f"Фрагмент: {len(view)} узлов, {view.number_of_edges()} направленных рёбер. Для прямых связей оставлены только переводы выбранного узла; лимит сохраняет обе стороны потока.")
+            else:
+                st.info("У этого gid нет наблюдаемых рёбер в выгрузке.")
+    with right, st.container(border=True, key="investigation_details"):
         st.markdown('<span class="priority-pill">ГИПОТЕЗА ПО УЗЛУ</span>', unsafe_allow_html=True)
         st.subheader(ROLE_NAMES[row.role])
         st.caption(f"gid {selected}")
@@ -395,6 +353,7 @@ elif section == "Расследование":
         lambda r: "исходящий →" if r.src == selected else "← входящий", axis=1
     )
     related = related.sort_values("sum_kzt", ascending=False)
+    related[["src", "dst"]] = related[["src", "dst"]].astype(str)
     st.dataframe(
         related[["направление", "src", "dst", "sum_kzt", "n_tx", "depth"]].rename(columns={
             "src": "плательщик", "dst": "получатель", "sum_kzt": "сумма ₸",
@@ -432,6 +391,7 @@ elif section == "Приоритеты":
         open_gid(selected_top)
     st.markdown('<div class="small-note">Приоритет — порядок просмотра, а не оценка виновности. Основание для каждого места в рейтинге приведено в последнем столбце.</div>', unsafe_allow_html=True)
     top_view = top.copy()
+    top_view["gid"] = top_view.gid.astype(str)
     top_view["роль"] = top_view.role.map(ROLE_NAMES)
     st.dataframe(
         top_view[["rank", "gid", "роль", "priority_score", "why"]].rename(columns={

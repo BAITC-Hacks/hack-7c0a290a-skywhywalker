@@ -23,9 +23,14 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_overview_and_primary_action(self):
         app = self.app()
-        self.assertEqual(app.title[0].value, "Кого проверить следующим?")
-        self.assertEqual(len(app.metric), 4)
-        app.button(key="start_investigation").click().run()
+        html = app.get("html")[0].proto.body
+        self.assertIn("Кого проверить следующим?", html)
+        self.assertEqual(html.count('class="mm-stat"'), 4)
+        gid = app.sidebar.text_input[0].value
+        self.assertIn(f'section=investigation&amp;gid={gid}', html)
+        app.query_params["section"] = "investigation"
+        app.query_params["gid"] = gid
+        app.run()
         self.assert_clean(app)
         self.assertEqual(app.sidebar.radio[0].value, "Расследование")
         self.assertEqual(app.title[0].value, "Связи и основания")
@@ -43,14 +48,16 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_candidates_and_orphan(self):
         app = self.app()
-        candidates = [button for button in app.button if str(button.key).startswith("candidate_")]
-        self.assertEqual(len(candidates), 3)
-        key = candidates[1].key
-        app.button(key=key).click().run()
-        self.assert_clean(app)
-        self.assertEqual(app.sidebar.text_input[0].value, key.removeprefix("candidate_"))
-        # Find real edge cases from outputs instead of hardcoding a GID.
         import pandas as pd
+        top = pd.read_csv(ROOT / "out" / "top_nodes.csv", dtype={"gid": str})
+        gid = top.iloc[1].gid
+        self.assertIn(f'aria-label="Изучить узел {gid}"', app.get("html")[0].proto.body)
+        app.query_params["section"] = "investigation"
+        app.query_params["gid"] = gid
+        app.run()
+        self.assert_clean(app)
+        self.assertEqual(app.sidebar.text_input[0].value, gid)
+        # Find real edge cases from outputs instead of hardcoding a GID.
         roles = pd.read_csv(ROOT / "out" / "nodes_roles.csv", dtype={"gid": str})
         orphan = roles[(roles.in_deg == 0) & (roles.out_deg == 0)].iloc[0]
         app.sidebar.text_input[0].set_value(orphan.gid).run()
